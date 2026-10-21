@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Concrete Poetry</title>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Averia+Serif+Libre&display=swap" rel="stylesheet">
+<style>
+  :root { --paper: #ffffff; --ink: #1b1a17; --muted: #8a857a; --card: min(calc(100vw - 32px), calc(100vh - 240px)); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: var(--paper); color: var(--ink); font-family: "Courier Prime", "Courier New", monospace; display: flex; flex-direction: column; justify-content: center; }
+  /* form, square card and caption sit together as one centred stack */
+  #name { margin: 18px 0 0; text-align: center; font-size: 13px; letter-spacing: 0.6em; text-transform: uppercase; }
+  #wrap { margin: 16px 16px 0; display: flex; flex-direction: column; align-items: center; }
+  #card { position: relative; width: var(--card); aspect-ratio: 1; background: #fff; border: 1px solid #000; border-radius: 8px; overflow: hidden; }
+  .corner { position: fixed; top: 20px; margin: 0; font-family: "Averia Serif Libre", serif; font-size: 22px; }
+  .corner.l { left: 24px; }
+  .corner.r { right: 24px; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  #stage:active { cursor: grabbing; }
+  header { padding: 20px 16px 0; text-align: center; }
+  form { display: inline-flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: end; }
+  label { font-size: 14px; color: var(--muted); width: 100%; }
+  input, button { font: inherit; font-size: 18px; color: var(--ink); background: transparent; }
+  input { width: 14ch; text-align: center; border: 0; border-bottom: 1.5px solid var(--ink); padding: 6px 4px; outline: none; }
+  button { cursor: pointer; border: 1.5px solid var(--ink); padding: 6px 14px; }
+  button:hover, button:focus-visible { background: var(--ink); color: var(--paper); }
+  #hint { color: var(--muted); font-size: 14px; min-height: 1.2em; margin: 8px 0 0; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<p class="corner l">Concrete Poetry</p>
+<p class="corner r">Made by Manasi</p>
+<header>
+  <form id="f">
+    <label for="w">type one emotion</label>
+    <input id="w" autocomplete="off" placeholder="joy" maxlength="24">
+    <button>write</button>
+    <button type="button" id="again">another</button>
+  </form>
+  <p id="hint"></p>
+</header>
+<main id="wrap"><div id="card"><canvas id="stage" aria-hidden="true"></canvas></div><p id="name"></p></main>
+<div id="poem" class="sr" aria-live="polite"></div>
+
+<script type="module">
+import * as THREE from 'three';
+
+const POEMS = {
+  joy: { lines: [
+    'I wake and the light is already laughing',
+    '{e} spills over the rim of the morning',
+    'every window in me is thrown open',
+    'the day hums a song it learned from me',
+    'I am wearing the sun like a coat',
+    'small things glitter: a spoon, a stair, your name',
+    'nothing heavy can find me here',
+    'my heart is a kite that forgot its string' ] },
+  hope: { lines: [
+    'somewhere past the dark a door is warming',
+    'I keep a little {e} in my pocket like a seed',
+    'the night is long but it is not the last',
+    'each dawn is a promise kept',
+    'I lean toward the light the way leaves do',
+    'what broke will learn to hold the light',
+    'tomorrow is a word I can say out loud',
+    'don\'t give up, the sun is rising somewhere' ] },
+  love: { lines: [
+    'I carry your name the way the sea carries the moon',
+    '{e} is the room I keep coming home to',
+    'your laugh is the warmest place I know',
+    'I would cross every winter to reach you',
+    'two hands, one weather',
+    'in every crowd my eyes go looking for you',
+    'you are the quiet under all my noise',
+    'I learned the shape of forever from your shoulder' ] },
+  anger: { lines: [
+    'it starts as a spark behind the teeth',
+    '{e} climbs the walls of my chest',
+    'I am a match that remembers every strike',
+    'the heat has a voice and the voice says no',
+    'burn it down to what is true',
+    'my hands are fists of weather',
+    'smoke where my patience used to live',
+    'let it rise, let it roar, let it end' ] },
+  sadness: { lines: [
+    'the rain knows my name tonight',
+    '{e} sits down at the edge of the bed',
+    'I fold the day and put it away unread',
+    'every drop is a word I could not say',
+    'the sky and I are both heavy',
+    'I miss things I cannot name',
+    'the cup goes cold beside me',
+    'even the light comes in slowly' ] },
+  loneliness: { lines: [
+    'the chair across from me is empty again',
+    '{e} echoes down a long hallway',
+    'I talk to the walls and the walls are polite',
+    'one plate, one cup, one shadow',
+    'the phone stays quiet as a stone',
+    'I am an island learning the tide',
+    'the stars are far apart too',
+    'and still I wait, and still, and still' ] },
+  fear: { lines: [
+    'something moves just past the edge of seeing',
+    '{e} taps at the window in the dark',
+    'my breath forgets how to count',
+    'the floor tilts, the walls lean in',
+    'every shadow wears a face',
+    'I hold still so it will not find me',
+    'the heart runs ahead without me',
+    'and things come apart, letter by letter' ] },
+  calm: { lines: [
+    'the water holds the sky without trying',
+    '{e} breathes in slow, breathes out slower',
+    'nothing needs me in this moment',
+    'the tide comes in, the tide goes out',
+    'my thoughts float by like paper boats',
+    'soft light on still water',
+    'I am the shore and the wave is welcome',
+    'rest here, there is time' ] },
+  surprise: { lines: [
+    'the ground drops out from under the ordinary',
+    '{e} arrives without knocking',
+    'my mouth opens and no word comes',
+    'everything I knew turns over like a card',
+    'the world flips its coin and it lands on edge',
+    'a door I never saw swings wide',
+    'my breath catches on the bright edge of it',
+    'oh, and oh, and oh' ] },
+  weary: { lines: [
+    'the couch has learned the shape of me',
+    '{e} pulls a blanket over the whole afternoon',
+    'every task waits by the door and I let it wait',
+    'my bones are full of slow honey',
+    'the clock ticks and I do not answer',
+    'tomorrow, I tell the dishes, tomorrow',
+    'even my thoughts lie down',
+    'I am a cat in the one warm square of sun' ] },
+  any: { lines: [
+    '{e} came in without knocking',
+    'today I am made of {e}',
+    'I wear {e} like a coat that does not quite fit',
+    '{e}, {e}, the word keeps its own weather',
+    'I hold {e} up to the light to see through it',
+    'what is {e} if not a shape I live in',
+    'the whole day leans toward {e}',
+    'I write {e} on the page and it writes back' ] },
+};
+
+// every word: [shape, poem bank]. shape = a LAYOUT name or an emoji whose silhouette gets filled with text
+const WORDS = Object.fromEntries(`
+happy spiral joy|happiness spiral joy|joy spiral joy|joyful ☀ joy|glad 🌼 joy|cheerful 🌻 joy|pleased 🧁 joy|satisfied 🍰 joy
+amused 🎈 joy|delighted 🎉 joy|jovial 🎪 joy|proud 👑 joy|triumphant 🏆 joy|illustrious 🌟 joy|eager 🐕 joy|enthusiastic 🚀 joy
+excited burst joy|zeal flame joy|euphoric 🎇 joy|elation ⭐ joy|elated ⭐ joy|jubilation 🎊 joy|enthralled ✨ joy|enchanted 🦄 joy
+rapture 🌠 joy|playful 🐬 joy|carefree 🪁 joy|silly 🦆 joy|confident 🦁 joy|content rings calm|blissful ☁ calm
+hope 🌈 hope|hopeful 🕯 hope|optimistic 🌱 hope|brave 🛡 hope|inspired 💡 hope|determined ⛰ hope|motivated 🏃 hope|free 🦅 hope
+love heart love|loved heart love|affectionate 💞 love|tender 🕊 love|tenderness 🕊 love|caring 🧸 love|compassionate 🤲 love
+desire 💋 love|passion 🌹 love|passionate 🌹 love|infatuated 💘 love|infatuation 💘 love|romantic 💌 love|attracted 🧲 love
+sentimental 📷 love|fond 🐻 love|fondness 🐻 love|longing 🌙 love|yearning 🔭 love|adoration 💐 love|devotion 💍 love
+grateful 🙏 love|thankful 🎁 love|touched 🌸 love
+peaceful waves calm|peace waves calm|calm waves calm|serene 🍃 calm|relieved 🌬 calm|relaxed 🛁 calm|safe 🏠 calm
+cozy ☕ calm|dreamy 💭 calm|mellow 🍵 calm
+sad tear sadness|sadness tear sadness|unhappy ☔ sadness|depressed droop sadness|miserable 🌧 sadness|sorrow 🥀 sadness
+grief rain sadness|grieving 🖤 sadness|despair rain sadness|hurt 🩹 sadness|heartbroken 💔 sadness|suffering 🌵 sadness
+agony 🗡 sadness|disappointed droop sadness|dismayed 🍂 sadness|regretful ⏳ sadness|regret ⏳ sadness|guilty 🔗 sadness
+guilt 🔗 sadness|shameful 🙈 sadness|ashamed 🙈 sadness|shame 🙈 sadness|embarrassed 🍅 sadness|hopeless ⚓ sadness
+powerless 🔌 sadness|melancholy 🎻 sadness|blue 🐋 sadness|gloomy 🌫 sadness
+lonely tail loneliness|loneliness tail loneliness|neglected tail loneliness|alone 🏝 loneliness|isolated 🛰 loneliness
+abandoned 🏚 loneliness|homesick 🧳 loneliness|empty 🕳 loneliness|lost 🧭 loneliness|invisible 👤 loneliness|nostalgic 📻 loneliness|nostalgia 📻 loneliness
+fear 👁 fear|afraid 🕸 fear|scared 👻 fear|frightened 🦇 fear|terror scatter fear|terrified scatter fear|panic 🚨 fear
+hysterical 🎢 fear|insecure echo fear|inferior 🐜 fear|inadequate 🧩 fear|nervous jitter fear|anxious jitter fear|anxiety jitter fear
+worried ⏰ fear|stressed 🧶 fear|overwhelmed 🌊 fear|horror 🕷 fear|dread 💀 fear|mortified 🗿 fear|paranoid 📡 fear
+vulnerable 🥚 fear|helpless 🐟 fear|restless 🌪 fear
+anger flame anger|angry flame anger|rage 💥 anger|furious 🌋 anger|mad 🐂 anger|hate ⛓ anger|hatred ⛓ anger|hostile 🦂 anger
+agitated 🐝 anger|frustrated 🧱 anger|exasperated 💢 anger|annoyed 🦟 anger|irritable zigzag anger|irritated zigzag anger
+aggravated 🌶 anger|resentful 🦔 anger|bitter 🌰 anger|displeased 🍋 anger|jealous 🐍 anger|jealousy 🐍 anger|envy 🐍 anger
+envious 🐍 anger|disgust 🦠 anger|disgusted 🦠 anger|contempt 🐀 anger|revolted 🐛 anger|spiteful 🐊 anger
+surprise ❗ surprise|surprised ❗ surprise|amazed burst surprise|stunned ⚡ surprise|shocked ⚡ surprise|astonished ☄ surprise
+awe 🪐 surprise|awestruck 🪐 surprise|astounded 🎆 surprise|speechless 🔇 surprise|overcome 🌊 surprise|moved 🦋 surprise
+stimulated 🎶 surprise|confused knot surprise|perplexed knot surprise|puzzled ❓ surprise|bewildered 🌀 surprise
+disillusioned 🎭 surprise|curious 🔍 surprise
+lazy 🦥 weary|tired 🛏 weary|sleepy 💤 weary|exhausted 🔋 weary|bored 🐌 weary|drained 🧽 weary|apathetic 🥔 weary|numb 🧊 weary
+`.trim().split(/[|\n]/).map(e => { const [w, shape, bank] = e.split(' '); return [w, { shape, bank }]; }));
+
+// ---------- layout: every shape becomes a list of glyphs in an 800x960 page (y down, x/y = left baseline) ----------
+const CX = 400, PAGE_W = 800, PAGE_H = 960;
+let G = [];
+const put = (ch, x, y, fs, deg = 0, a = 1) => { if (ch !== ' ') G.push({ ch, x, y, fs, deg, a }); };
+function putText(s, x, y, fs, deg = 0, track = 0, a = 1) {
+  const r = deg * Math.PI / 180, adv = fs * 0.6 + track;
+  [...s].forEach((c, i) => put(c, x + Math.cos(r) * adv * i, y + Math.sin(r) * adv * i, fs, deg, a));
+}
+// lay text along a polyline by arc length, each glyph turned to the local tangent
+function alongPath(pts, s, fs, a = 1) {
+  const adv = fs * 0.6;
+  let i = 0, carry = 0;
+  for (let k = 1; k < pts.length && i < s.length; k++) {
+    const [x0, y0] = pts[k - 1], [x1, y1] = pts[k], L = Math.hypot(x1 - x0, y1 - y0);
+    const deg = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI;
+    let d = carry;
+    for (; d <= L && i < s.length; d += adv) put(s[i++], x0 + (x1 - x0) * d / L, y0 + (y1 - y0) * d / L, fs, deg, a);
+    carry = d - L;
+  }
+}
+
+const repeat = (s, len) => s.repeat(Math.ceil(len / s.length)).slice(0, len);
+const shuffle = a => a.map(v => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map(v => v[1]);
+
+function chunks(lines, max) {
+  const out = [];
+  for (const line of lines) {
+    let cur = '';
+    for (const w of line.split(' ')) {
+      if (cur && (cur + ' ' + w).length > max) { out.push(cur); cur = w; }
+      else cur = cur ? cur + ' ' + w : w;
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+
+// text filling a silhouette row by row, justified to each row's width (House of Leaves style)
+const SILHOUETTES = {
+  heart(x, y) { x *= 1.15; y = y * 1.15 + 0.12; return (x * x + y * y - 1) ** 3 - x * x * y ** 3 <= 0; },
+  tear(x, y) {
+    const c = -0.35, r = 0.62;
+    if (y < c) return x * x + (y - c) ** 2 <= r * r;
+    return Math.abs(x) <= r * Math.pow(1 - (y - c) / (1 - c), 1.5);
+  },
+  flame(x, y) {
+    const t = (y + 1) / 2;
+    if (t < 0 || t > 1) return false;
+    const w = 0.62 * Math.sin(Math.PI * Math.pow(1 - t, 1.7));
+    return Math.abs(x - 0.14 * Math.sin(t * 9) * t) <= w;
+  },
+};
+
+function fill(inside, lines, fs = 13, cy = 540, s = 330) {
+  const cw = fs * 0.6, lh = fs * 1.25, src = lines.join(' · ') + ' · ';
+  let p = 0;
+  for (let y = cy - s; y <= cy + s; y += lh) {
+    let run = null;
+    for (let x = CX - s; x <= CX + s + cw; x += cw / 2) {
+      const on = x <= CX + s && inside((x - CX) / s, (cy - y) / s);
+      if (on && run == null) run = x;
+      else if (!on && run != null) {
+        const k = Math.floor((x - run) / cw), gap = (x - run) / k;
+        if (k >= 3) for (let j = 0; j < k; j++) put(src[p++ % src.length], run + j * gap, y, fs);
+        run = null;
+      }
+    }
+  }
+}
+
+// emoji -> inside(x, y) test, from its alpha channel, scaled so its bounding box fills the frame
+const masks = {};
+function emojiMask(e) {
+  if (masks[e]) return masks[e];
+  const S = 200, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.font = `${S * 0.8}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(e, S / 2, S / 2);
+  const d = x.getImageData(0, 0, S, S).data, on = (px, py) => d[(py * S + px) * 4 + 3] > 100;
+  let x0 = S, y0 = S, x1 = -1, y1 = -1;
+  for (let py = 0; py < S; py++) for (let px = 0; px < S; px++) if (on(px, py)) {
+    x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+  }
+  if (x1 < 0) return masks[e] = SILHOUETTES.heart; // no emoji font on this machine
+  const half = Math.max(x1 - x0, y1 - y0) / 2, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  return masks[e] = (nx, ny) => {
+    const px = Math.round(cx + nx * half), py = Math.round(cy - ny * half);
+    return px >= 0 && py >= 0 && px < S && py < S && on(px, py);
+  };
+}
+
+const LAYOUT = {
+  heart: lines => fill(SILHOUETTES.heart, lines),
+  tear: lines => fill(SILHOUETTES.tear, lines),
+  flame: lines => fill(SILHOUETTES.flame, lines, 12),
+
+  // sun: poem spirals in toward the centre, fragments radiate as rays
+  spiral(lines) {
+    const cy = 520, rMax = 215, turns = 5, b = rMax / (turns * 2 * Math.PI), pts = [];
+    for (let t = turns * 2 * Math.PI; t > 2; t -= 0.05) pts.push([CX + b * t * Math.cos(-t), cy + b * t * Math.sin(-t)]);
+    alongPath(pts, repeat(lines.slice(0, 6).join('  ~  ') + '  ~  ', 400), 15);
+    const rays = chunks(lines.slice(4), 16).slice(0, 16);
+    rays.forEach((r, i) => {
+      const deg = i * 360 / rays.length - 90 + (Math.random() * 8 - 4), a = deg * Math.PI / 180;
+      putText(r.toUpperCase(), CX + 240 * Math.cos(a), cy + 240 * Math.sin(a), 13, deg, 1);
+    });
+  },
+
+  // the mouse's tale: words trickle down, shrinking as they go
+  tail(lines) {
+    const words = lines.join(' ').split(' ');
+    let y = 130;
+    for (let i = 0, row = 0; i < words.length; row++) {
+      const fs = Math.max(7, 30 * Math.pow(0.95, row)), k = fs > 16 ? 2 : 3;
+      y += fs * 1.4;
+      putText(words.slice(i, i + k).join(' '), 300 + 110 * Math.sin(row * 0.33) + row * 6, y, fs);
+      i += k;
+    }
+  },
+
+  // the first lines hold, the rest fall apart letter by letter
+  scatter(lines) {
+    const fs = 16, cw = fs * 0.6, lh = fs * 1.5, x0 = 130, r = Math.random;
+    lines.forEach((ln, k) => {
+      const y = 150 + k * lh;
+      if (k < 2) return putText(ln, x0, y, fs);
+      const c = k - 1;
+      [...ln].forEach((ch, j) => put(ch, x0 + j * cw + (r() - 0.5) * c * c * 6, y + r() * c * c * 14, fs, (r() - 0.5) * c * 30));
+    });
+  },
+
+  // surprise: lines shoot out of one point, like a startle
+  burst(lines) {
+    const cy = 520, frags = chunks(lines, 22), N = 28;
+    for (let i = 0; i < N; i++) {
+      const deg = i * 360 / N + (Math.random() - 0.5) * 6, a = deg * Math.PI / 180, r0 = 60 + Math.random() * 50;
+      const fs = 11 + Math.random() * 6, s = frags[i % frags.length];
+      putText(s, CX + r0 * Math.cos(a), cy + r0 * Math.sin(a), fs, deg, 1 + Math.random() * 3);
+    }
+  },
+
+  // content: the poem goes round and round, settled in rings
+  rings(lines) {
+    const src = lines.join('  ·  ') + '  ·  ';
+    for (let r = 60, k = 0; r <= 300; r += 40, k++) {
+      const pts = [];
+      for (let t = 0; t <= Math.PI * 2; t += 0.02) pts.push([CX + r * Math.sin(t), 540 - r * Math.cos(t)]);
+      alongPath(pts, repeat(src.slice(k * 7) + src, 400), 13 + (k % 2) * 2);
+    }
+  },
+
+  // confused: one line that keeps crossing itself
+  knot(lines) {
+    const pts = [];
+    for (let t = 0; t <= Math.PI * 2; t += 0.01) pts.push([CX + 300 * Math.sin(3 * t + Math.PI / 2), 540 + 300 * Math.sin(2 * t)]);
+    alongPath(pts, repeat(lines.join('  ?  ') + '  ?  ', 1200), 13);
+  },
+
+  // irritable: every line snaps back and forth
+  zigzag(lines) {
+    lines.forEach((ln, k) => {
+      const y0 = 180 + k * 85, pts = [];
+      for (let x = 40, j = 0; x <= 760; x += 36, j++) pts.push([x, y0 + (j % 2 ? 22 : -22)]);
+      alongPath(pts, repeat(ln + ' / ', 90), 15);
+    });
+  },
+
+  // disappointed: each line sags a little more than the one above it
+  droop(lines) {
+    lines.forEach((ln, k) => {
+      const y0 = 190 + k * 78, sag = 20 + k * 14, pts = [];
+      for (let x = 80; x <= 720; x += 8) pts.push([x, y0 + sag * (1 - ((x - 400) / 320) ** 2)]);
+      alongPath(pts, ' '.repeat(Math.max(0, Math.floor((72 - ln.length) / 2))) + ln, 15);
+    });
+  },
+
+  // despair: letters run down the page in columns, fading as they fall
+  rain(lines) {
+    const src = lines.join(' ').replace(/ /g, '');
+    let p = 0;
+    for (let x = 60; x <= 740; x += 17) {
+      const y0 = 150 + Math.random() * 250, len = 10 + Math.floor(Math.random() * 30);
+      for (let j = 0; j < len; j++) put(src[p++ % src.length], x, y0 + j * 13, 12, 0, 1 - j / len * 0.8);
+    }
+  },
+
+  // insecure: each line said again, smaller, quieter
+  echo(lines) {
+    let y = 160;
+    for (let k = 0; k < 16; k++) {
+      const ln = lines[k % lines.length], fs = Math.max(6, 30 * 0.86 ** k);
+      y += fs * 1.5;
+      putText(ln, CX - ln.length * fs * 0.3, y, fs, 0, 0, Math.max(0.25, 1 - k * 0.05));
+    }
+  },
+
+  // nervous: every letter trembles, with a shaky after-image
+  jitter(lines) {
+    const r = Math.random;
+    lines.forEach((ln, k) => {
+      const fs = 18, x0 = CX - ln.length * fs * 0.3, y = 200 + k * 80;
+      [...ln].forEach((ch, j) => {
+        const x = x0 + j * fs * 0.6;
+        put(ch, x + (r() - 0.5) * 4, y + (r() - 0.5) * 4, fs, (r() - 0.5) * 16);
+        put(ch, x + 3 + (r() - 0.5) * 4, y + 2 + (r() - 0.5) * 4, fs, (r() - 0.5) * 16, 0.3);
+      });
+    });
+  },
+
+  // each line rides its own slow wave, fading toward the bottom
+  waves(lines) {
+    lines.forEach((ln, k) => {
+      const y0 = 170 + k * 85, A = 14 + k * 2, ph = k * 0.9, pts = [];
+      for (let x = 40; x <= 760; x += 8) pts.push([x, y0 + A * Math.sin(x / 70 + ph)]);
+      alongPath(pts, repeat(ln + '   ~   ', 90), 17, 1 - k * 0.08);
+    });
+  },
+};
+
+// exact word, then a shared stem ("terrifying" ~ "terrified"), else any word still gets a real shape
+function classify(word) {
+  if (WORDS[word]) return WORDS[word];
+  const near = Object.keys(WORDS).find(w => word.length > 3 && w.length > 3 && (word.startsWith(w.slice(0, 4)) || w.startsWith(word)));
+  if (near) return WORDS[near];
+  // ponytail: off-list words get a stable but arbitrary shape and the word-only poem bank
+  const shapes = [...new Set(Object.values(WORDS).map(v => v.shape))];
+  return { shape: shapes[[...word].reduce((h, c) => h * 31 + c.charCodeAt(0) >>> 0, 7) % shapes.length], bank: 'any', off: true };
+}
+
+// ---------- WebGL: one instanced quad per glyph, sampled from a canvas font atlas ----------
+const COLS = 16, ROWS = 8, CELL = 64;
+const CHARS = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).join('') + '·';
+
+await document.fonts.load(`${CELL * 0.8}px "Courier Prime"`).catch(() => {});
+const atlasCanvas = document.createElement('canvas');
+atlasCanvas.width = COLS * CELL; atlasCanvas.height = ROWS * CELL;
+const ctx = atlasCanvas.getContext('2d');
+ctx.font = `${CELL * 0.8}px "Courier Prime", "Courier New", monospace`;
+ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+[...CHARS].forEach((c, i) => ctx.fillText(c, (i % COLS + 0.5) * CELL, (Math.floor(i / COLS) + 0.75) * CELL));
+const atlas = new THREE.CanvasTexture(atlasCanvas);
+atlas.anisotropy = 4;
+
+THREE.ColorManagement.enabled = false;
+const canvas = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 10, 8000);
+
+const JUMP = 0.08; // share of the whole build each letter spends mid-jump
+const material = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  uniforms: { uT: { value: 0 }, uAtlas: { value: atlas }, uColor: { value: new THREE.Color() } },
+  vertexShader: `
+    attribute vec3 aStart; attribute vec3 aEnd; attribute vec2 aRot;
+    attribute float aSize; attribute float aCell; attribute float aDelay; attribute float aAlpha;
+    uniform float uT;
+    varying vec2 vUv; varying float vAlpha;
+    void main() {
+      // each letter hops in an arc from just below its spot, then squashes a little as it lands
+      float p = clamp((uT - aDelay) / ${JUMP}, 0.0, 1.0);
+      float e = p * p * (3.0 - 2.0 * p);
+      vec3 pos = mix(aStart, aEnd, e);
+      pos.y += sin(e * 3.14159) * 110.0;
+      pos.z += sin(e * 3.14159) * 60.0;
+      float r = mix(aRot.x, aRot.y, e);
+      float squash = sin(clamp((p - 0.8) / 0.2, 0.0, 1.0) * 3.14159) * 0.22;
+      vec2 q = mat2(cos(r), sin(r), -sin(r), cos(r)) * (position.xy * aSize * vec2(1.0 + squash, 1.0 - squash));
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos + vec3(q, 0.0), 1.0);
+      float col = mod(aCell, ${COLS}.0), row = floor(aCell / ${COLS}.0);
+      vUv = vec2((col + uv.x) / ${COLS}.0, 1.0 - (row + 1.0 - uv.y) / ${ROWS}.0);
+      vAlpha = aAlpha * smoothstep(0.0, 0.15, p);
+    }`,
+  fragmentShader: `
+    uniform sampler2D uAtlas; uniform vec3 uColor;
+    varying vec2 vUv; varying float vAlpha;
+    void main() {
+      float a = texture2D(uAtlas, vUv).a * vAlpha;
+      if (a < 0.02) discard;
+      gl_FragColor = vec4(uColor, a);
+    }`,
+});
+// round shapes spin like a dial when dragged; their centre (page y) is the pivot
+const SPIN = { spiral: 520 }; // only the sun turns
+const pivot = new THREE.Group();
+scene.add(pivot);
+let meshes = [];
+
+// one instanced mesh for list = G.slice(i0, i0 + list.length); delays run over the whole poem
+function buildMesh(list, i0, parent) {
+  const N = G.length, base = new THREE.PlaneGeometry(1, 1), geo = new THREE.InstancedBufferGeometry();
+  geo.index = base.index;
+  geo.setAttribute('position', base.getAttribute('position'));
+  geo.setAttribute('uv', base.getAttribute('uv'));
+  const start = new Float32Array(N * 3), end = new Float32Array(N * 3), rot = new Float32Array(N * 2);
+  const size = new Float32Array(N), cell = new Float32Array(N), delay = new Float32Array(N), alpha = new Float32Array(N);
+  list.forEach((g, j) => {
+    const i = j;
+    // glyph cell centre sits 0.3em right of and 0.31em above the left baseline, turned with the glyph
+    const r = g.deg * Math.PI / 180, u = 0.3 * g.fs, v = -0.3125 * g.fs;
+    const ex = g.x + u * Math.cos(r) - v * Math.sin(r) - PAGE_W / 2, ey = PAGE_H / 2 - (g.y + u * Math.sin(r) + v * Math.cos(r));
+    end.set([ex, ey, 0], i * 3);
+    start.set([ex + (Math.random() - 0.5) * 80, ey - 140 - Math.random() * 80, 0], i * 3);
+    rot.set([-r + (Math.random() - 0.5) * 1.5, -r], i * 2);
+    size[i] = g.fs * 1.25;
+    cell[i] = Math.max(0, CHARS.indexOf(g.ch)) || CHARS.indexOf('?');
+    delay[i] = ((i0 + j) / N) * (1 - JUMP - 0.02) + Math.random() * 0.02; // letters arrive in reading order
+    alpha[i] = g.a;
+  });
+  const attr = (name, arr, n) => geo.setAttribute(name, new THREE.InstancedBufferAttribute(arr, n));
+  attr('aStart', start, 3); attr('aEnd', end, 3); attr('aRot', rot, 2);
+  attr('aSize', size, 1); attr('aCell', cell, 1); attr('aDelay', delay, 1); attr('aAlpha', alpha, 1);
+  geo.instanceCount = list.length;
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.frustumCulled = false;
+  parent.add(mesh);
+  return mesh;
+}
+
+// ---------- camera: fit the page, zoom toward the cursor, drag to move ----------
+let dist = 1800;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const card = document.getElementById('card');
+let tan = 1;
+const home = new THREE.Vector3(); // camera position, always face-on: pan + zoom
+const target = new THREE.Vector3();
+function resize() {
+  const w = card.clientWidth, h = card.clientHeight;
+  tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  dist = Math.max(PAGE_H / 2 / tan, PAGE_W / 2 / (tan * camera.aspect)) * 1.06;
+}
+const look = () => camera.lookAt(target);
+function moveTo(x, y, z) {
+  // keep the page under the card: never pan past its edges
+  home.set(THREE.MathUtils.clamp(x, -PAGE_W / 2, PAGE_W / 2), THREE.MathUtils.clamp(y, -PAGE_H / 2, PAGE_H / 2), z);
+  if (z >= dist) home.set(0, 0, dist);
+  target.set(home.x, home.y, 0);
+  camera.position.copy(home);
+  look();
+}
+const goHome = () => moveTo(0, 0, dist);
+
+// wheel or trackpad pinch: zoom toward the cursor, from the whole page up to 4x
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  gsap.killTweensOf(camera.position);
+  const r = canvas.getBoundingClientRect();
+  const nx = (e.clientX - r.left) / r.width * 2 - 1, ny = 1 - (e.clientY - r.top) / r.height * 2;
+  const z = THREE.MathUtils.clamp(home.z * Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)), dist / 4, dist);
+  const wx = home.x + nx * home.z * tan * camera.aspect, wy = home.y + ny * home.z * tan;
+  moveTo(wx - nx * z * tan * camera.aspect, wy - ny * z * tan, z);
+}, { passive: false });
+addEventListener('resize', () => { resize(); goHome(); });
+resize();
+
+// drag: the sun spins at full view; everything else (and a zoomed-in sun) slides like paper
+let spinnable = false, drag = null, vel = 0;
+function angleAt(e) {
+  const p = pivot.getWorldPosition(new THREE.Vector3()).project(camera), r = canvas.getBoundingClientRect();
+  return Math.atan2(-(e.clientY - r.top - (1 - p.y) / 2 * r.height), e.clientX - r.left - (p.x + 1) / 2 * r.width);
+}
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  gsap.killTweensOf([pivot.rotation, camera.position]);
+  drag = spinnable && home.z >= dist
+    ? { spin: true, a: angleAt(e), t: performance.now() }
+    : { spin: false, x: e.clientX, y: e.clientY };
+  vel = 0;
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (drag.spin) {
+    const a = angleAt(e), now = performance.now(), d = Math.atan2(Math.sin(a - drag.a), Math.cos(a - drag.a));
+    pivot.rotation.z += d;
+    vel = d / Math.max(1, now - drag.t) * 1000;
+    drag.a = a; drag.t = now;
+  } else {
+    const k = 2 * home.z * tan / canvas.clientHeight; // world units per screen pixel
+    moveTo(home.x - (e.clientX - drag.x) * k, home.y + (e.clientY - drag.y) * k, home.z);
+    drag.x = e.clientX; drag.y = e.clientY;
+  }
+});
+const endDrag = () => {
+  if (drag?.spin) gsap.to(pivot.rotation, { z: pivot.rotation.z + vel * 0.6, duration: 2, ease: 'power3.out' });
+  drag = null;
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+function make(raw) {
+  const word = raw.trim().toLowerCase() || 'joy';
+  const { shape, bank, off } = classify(word), P = POEMS[bank];
+  const lines = shuffle(P.lines).map(l => l.replaceAll('{e}', word));
+  G = [];
+  (LAYOUT[shape] || (l => fill(emojiMask(shape), l, 12)))(lines);
+  meshes.forEach(m => { m.geometry.dispose(); m.removeFromParent(); });
+  const spins = shape in SPIN, cy = PAGE_H / 2 - (SPIN[shape] ?? PAGE_H / 2);
+  gsap.killTweensOf(pivot.rotation);
+  pivot.rotation.z = 0;
+  pivot.position.y = cy;
+  const body = buildMesh(G, 0, pivot);
+  body.position.y = -cy;
+  meshes = [body];
+  spinnable = spins;
+
+  material.uniforms.uColor.value.setStyle(getComputedStyle(document.body).color);
+  gsap.killTweensOf([material.uniforms.uT, camera.position]);
+  goHome();
+  if (reduced) material.uniforms.uT.value = 1;
+  else {
+    // slow build: longer for bigger poems, so each hop stays readable
+    const D = Math.min(14, Math.max(6, 4 + G.length * 0.004));
+    gsap.fromTo(material.uniforms.uT, { value: 0 }, { value: 1, duration: D, ease: 'none' });
+    gsap.fromTo(camera.position, { x: 160, y: -120, z: dist * 1.12 }, { x: 0, y: 0, z: dist, duration: D * 0.6, ease: 'power2.out', onUpdate: look });
+  }
+  document.getElementById('name').textContent = word;
+  document.getElementById('poem').textContent = lines.join('. ');
+  document.getElementById('hint').textContent = `${off ? 'a new word: shape picked for it · ' : ''}${spins ? 'drag to spin it · scroll to zoom in and drag to move' : 'scroll to zoom · drag to move'}`;
+}
+
+const input = document.getElementById('w');
+document.getElementById('f').addEventListener('submit', e => { e.preventDefault(); make(input.value); });
+document.getElementById('again').addEventListener('click', () => make(input.value));
+renderer.setAnimationLoop(() => renderer.render(scene, camera));
+make('joy');
+</script>
+</body>
+</html>
